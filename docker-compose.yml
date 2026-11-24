@@ -3,7 +3,7 @@ services:
     # Imagem publicada pelo workflow "Testes e imagem" a cada merge na main.
     # Atualizar: docker compose pull && docker compose up -d   (precisa de: docker login ghcr.io)
     # Para gerar a imagem nesta máquina em vez de baixar: docker compose up -d --build
-    image: ${CRM_IMAGEM:-ghcr.io/seu-usuario/crm-operacional:latest}
+    image: ${CRM_IMAGEM:-ghcr.io/buhlerr/crm-operacional:latest}
     build: .
     container_name: crm-operacional
     restart: unless-stopped

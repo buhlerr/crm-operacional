@@ -1,0 +1,116 @@
+"""RSA - Checklist do Suporte embutido e barra lateral. Só HTML sintético (o arquivo real tem nomes)."""
+
+import io
+
+import pytest
+
+from app import rsa
+from app.models import Papel, Usuario
+
+# HTML mínimo com as mesmas âncoras do app do modelo base do painel.
+RSA_SINTETICO = """<!doctype html><html><body>
+<div id="login"></div>
+<div id="app" class="hidden"><header class="topbar"></header><nav class="sidebar"></nav><main class="content" id="content"></main></div>
+<script>
+const APP_NOME_PADRAO='Checklist';
+let DB={appNome:''}, SESSION=null, activePage='visao';
+function saveDB(){}
+function revealApp(u){ go(activePage); }
+function go(page){ document.getElementById('content').textContent=page; }
+</script>
+</body></html>
+"""
+
+
+@pytest.fixture
+def cliente(app, db, tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "instance_path", str(tmp_path))  # não mexe no instance/ de verdade
+    admin = Usuario(nome="Admin Teste", email="admin@exemplo.com", papel=Papel.ADMIN)
+    consultora = Usuario(nome="Consultora Teste", email="consultora@exemplo.com", papel=Papel.CONSULTOR)
+    db.session.add_all([admin, consultora])
+    db.session.commit()
+    c = app.test_client()
+    c.ids = {"admin": admin.id, "consultora": consultora.id}
+
+    def entrar(quem):
+        with c.session_transaction() as sessao:
+            sessao["usuario_id"], sessao["csrf"] = c.ids[quem], "t"
+
+    c.entrar = entrar
+    return c
+
+
+def enviar(cliente, conteudo, nome="APP_Checklist_Suporte_ao_Aluno.html"):
+    return cliente.post("/rsa/enviar", data={"csrf": "t", "pagina": "visao", "arquivo": (io.BytesIO(conteudo), nome)},
+                        content_type="multipart/form-data", follow_redirects=True)
+
+
+def test_encaixe_abre_a_pagina_sem_login():
+    saida = rsa.encaixar(RSA_SINTETICO, "atrasos", "Nome </script> Teste", admin=False)
+    assert saida.replace(rsa.ARMAZENAMENTO_EM_MEMORIA, "", 1).startswith(RSA_SINTETICO[:RSA_SINTETICO.rfind("</body>")])
+    # O localStorage em memória vem antes de qualquer script do app (na origem isolada, o original dá erro).
+    assert saida.index(rsa.ARMAZENAMENTO_EM_MEMORIA) < saida.index("const APP_NOME_PADRAO")
+    com_head = rsa.encaixar(RSA_SINTETICO.replace("<html>", "<html><head><title>x</title></head>"), "visao", "Pessoa", admin=True)
+    assert "<head>" + rsa.ARMAZENAMENTO_EM_MEMORIA in com_head
+    assert 'activePage = "atrasos"' in saida and "revealApp(SESSION)" in saida
+    assert '"Leitura"' in saida and "</script> Teste" not in saida  # nome não fecha a tag
+
+
+def test_avisa_quando_o_html_nao_aceita_a_base_importada(app, cliente):
+    from app.importacao import rsa_checklist
+
+    assert rsa.aceita_base('<script>const DADOS_CHECKLIST = {"meta":{}};</script>')
+    assert not rsa.aceita_base(RSA_SINTETICO) and not rsa.aceita_base("<script>const DADOS_CHECKLIST = {quebrado</script>")
+    cliente.entrar("admin")
+    with app.app_context():
+        rsa_checklist.guardar_base({"meta": {"n": 1, "finalizados": 1, "em_aberto": 0}, "dic": {}, "col": {}}, 1, "x.csv")
+    aviso = "não tem a base de dados no formato esperado"
+    assert aviso in enviar(cliente, RSA_SINTETICO.encode()).get_data(as_text=True)
+    assert aviso in cliente.get("/rsa/visao").get_data(as_text=True)
+
+
+def test_envio_e_paginas(cliente):
+    cliente.entrar("admin")
+    assert "Ainda não há o HTML do RSA" in cliente.get("/rsa/visao").get_data(as_text=True)
+    assert "modelo base do painel" in enviar(cliente, b"<html></html>").get_data(as_text=True)
+    assert "HTML do RSA guardado" in enviar(cliente, RSA_SINTETICO.encode()).get_data(as_text=True)
+
+    pagina = cliente.get("/rsa/procedimentos").get_data(as_text=True)
+    assert 'src="/rsa/procedimentos/app"' in pagina
+    resposta = cliente.get("/rsa/procedimentos/app")
+    assert resposta.status_code == 200
+    assert resposta.headers["X-Frame-Options"] == "SAMEORIGIN"
+    # HTML enviado roda isolado: sandbox sem allow-same-origin, também no iframe.
+    politica = resposta.headers["Content-Security-Policy"]
+    assert "sandbox allow-scripts" in politica and "allow-same-origin" not in politica
+    assert 'sandbox="allow-scripts' in pagina and "allow-same-origin" not in pagina
+    assert 'activePage = "procedimentos"' in resposta.get_data(as_text=True)
+    assert cliente.get("/rsa/credenciais/app").status_code == 200
+    assert cliente.get("/rsa/nao-existe").status_code == 404
+
+
+def test_consultor_nao_ve_sistema_nem_administracao(cliente):
+    cliente.entrar("admin")
+    enviar(cliente, RSA_SINTETICO.encode())
+    menu_admin = cliente.get("/rsa/visao").get_data(as_text=True)
+    assert "Sistema do RSA" in menu_admin and "Administração" in menu_admin
+
+    cliente.entrar("consultora")
+    menu = cliente.get("/rsa/visao").get_data(as_text=True)
+    assert "RSA - Checklist do Suporte" in menu and "Prazos e Atrasos" in menu
+    assert "Sistema do RSA" not in menu and "Administração" not in menu and "Importações" not in menu
+    assert cliente.get("/rsa/credenciais").status_code == 403
+    assert cliente.get("/rsa/testes/app").status_code == 403
+    assert enviar(cliente, RSA_SINTETICO.encode()).status_code == 403
+
+
+def test_menu_lateral(cliente):
+    cliente.entrar("consultora")
+    html = cliente.get("/minha-fila").get_data(as_text=True)
+    for texto in ("Buscar aluno", "Filas de trabalho", "Minha fila", "Fila da equipe", "Por consultor", "Concluídas",
+                  "Total de pautas", "Ação pendente da UN", "Quebrou na nossa UN", "Recolher menu"):
+        assert texto in html, texto
+    lateral = html[html.find('<nav class="sidebar"'):html.find("</nav>")]
+    # Estes ficam só no menu do nome, não na lateral.
+    for texto in ("Trocar senha", "Para lançar no ERP", "Quando usar NEG"):
+        assert texto not in lateral and texto in html, texto

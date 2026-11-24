@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block titulo %}Entrar{% endblock %}
+{% block conteudo %}
+<div class="login-card">
+  <img class="login-logo" src="{{ url_for('static', filename='logo-crm.svg') }}" alt="{{ NOME_SISTEMA }}">
+  <div class="sobretitulo">{{ ESCOPO_PAINEL }}{% if MODO_DEMO %} · <span class="selo demo">Modo Demo</span>{% endif %}</div>
+  <h1>{{ NOME_SISTEMA }}</h1>
+
+  {% if erro %}
+    <div class="mensagem erro" style="text-align:left">{{ erro }}</div>
+  {% endif %}
+
+  {% if total_usuarios > 0 %}
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ token_csrf() }}">
+    <div class="campo">
+      <label for="email">E-mail</label>
+      <input id="email" type="email" name="email" value="{{ email or '' }}" required autofocus autocomplete="username" placeholder="seu.email@{{ DOMINIO_EMAIL_EXEMPLO }}">
+    </div>
+    <div class="campo">
+      <label for="senha">Senha</label>
+      <input id="senha" type="password" name="senha" required autocomplete="current-password" placeholder="Sua senha de acesso">
+    </div>
+    <button class="botao" style="margin-top: 6px;">Entrar no sistema</button>
+  </form>
+  {% else %}
+    <div class="mensagem alerta" style="text-align:left">
+      Nenhum usuário cadastrado ainda. Use o comando <code>flask criar-admin</code> no terminal do servidor para criar o primeiro administrador.
+    </div>
+  {% endif %}
+
+  {% if MODO_DEMO and total_usuarios > 0 %}
+  <div class="login-demo">
+    <div class="login-demo-titulo">Acesso rápido à demonstração</div>
+    <p class="login-demo-texto">Entre com uma das contas de exemplo para explorar as telas com dados fictícios.</p>
+    <form method="post">
+      <input type="hidden" name="csrf" value="{{ token_csrf() }}">
+      <input type="hidden" name="email" value="ana.souza@exemplo.com">
+      <input type="hidden" name="senha" value="Demo@123456">
+      <button class="botao secundario login-demo-botao" type="submit">Entrar como Consultora Demo</button>
+    </form>
+    <form method="post">
+      <input type="hidden" name="csrf" value="{{ token_csrf() }}">
+      <input type="hidden" name="email" value="admin@exemplo.com">
+      <input type="hidden" name="senha" value="Demo@123456">
+      <button class="botao secundario login-demo-botao" type="submit">Entrar como Administrador Demo</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <p class="login-dica">
+    Acesso individual por e-mail e senha cadastrados pela administração.
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="titulo-logo">
+  <title id="titulo-logo">CRM Operacional</title>
+  <defs>
+    <linearGradient id="fundo-crm" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0c2b4c"/>
+      <stop offset="1" stop-color="#07203a"/>
+    </linearGradient>
+  </defs>
+  <!-- Emblema: escudo arredondado azul-marinho com degraus ascendentes em verde-azulado. -->
+  <rect x="1.5" y="1.5" width="61" height="61" rx="15" fill="url(#fundo-crm)" stroke="#1d5b8f" stroke-opacity="0.35"/>
+  <path d="M12 45h9v-12h9v-12h9" fill="none" stroke="#0f9a94" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="47.5" cy="21" r="6.5" fill="#17b8b0"/>
+</svg>

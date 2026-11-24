@@ -1,0 +1,25 @@
+# Override para hospedar a demonstração pública 24/7 (ex.: VM no Proxmox atrás da Cloudflare).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
+#
+# Com conector Cloudflare no mesmo Compose (opcional):
+#   CLOUDFLARED_TOKEN=... docker compose -f docker-compose.yml -f docker-compose.demo.yml --profile cloudflare up -d
+#
+# No painel da Cloudflare Zero Trust, aponte o Public Hostname para:
+#   - http://crm-checklist:8080  (se usar --profile cloudflare)
+#   - http://localhost:8081      (se o cloudflared rodar direto no host)
+services:
+  crm-checklist:
+    environment:
+      - MODO_DEMO=1
+      - AUTO_SEED_DEMO=1
+      - ATRAS_DE_PROXY=${ATRAS_DE_PROXY:-1}
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: crm-operacional-tunnel
+    restart: unless-stopped
+    profiles: ["cloudflare"]
+    depends_on:
+      - crm-checklist
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN:-}
